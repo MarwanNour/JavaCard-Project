@@ -11,9 +11,11 @@ import javacard.framework.JCSystem;
 import javacard.framework.OwnerPIN;
 
 /** 
- * Author: Marwan Nour | marwan.nour@polytechnique.edu
- *  
- * Sources:
+ * PIN Check implementation for the Embedded Security course at École Polytechnique.
+ * 
+ * @author Marwan Nour | marwan.nour@polytechnique.edu 
+ * 
+ * References:
  * - https://www.oracle.com/java/technologies/java-card/writing-javacard-applet.html
  * - https://docs.oracle.com/javacard/3.0.5/api/javacard/framework/OwnerPIN.html
  * - https://www.oracle.com/java/technologies/java-card/writing-javacard-applet2.html
@@ -42,31 +44,32 @@ public class PINCheck extends Applet {
     // Max number of incorrect try before PIN is blocked
     public static final byte PIN_TRY_LIMIT = (byte) 5;
     
+    /******** Tx specs ********/
+    // Max balance
+    public static final short MAX_BALANCE = 1000;
+    // Max tx amount 
+    public static final short MAX_TX_AMOUNT = 50;
+
     /******** Returned SW ********/
     // PIN verification failed SW
     public static final short SW_VERIFICATION_FAILED = 0x6300; 
     // PIN verification required SW
     public static final short SW_PIN_VERIFICATION_REQUIRED = 0x6301;
-    // Invalid amount (amount < 0  || amount > MAX_TRANSACTION_AMOUNT)
-    public static final short SW_INVALID_AMOUNT = 0x6A83;
-    // // Balance exceeded
-    // static final short SW_EXCEED_MAX_BALANCE = 0x6A84;
+    // Invalid amount (amount < 0  || amount > MAX_TX_AMOUNT)
+    public static final short SW_INVALID_TX_AMOUNT = 0x6A83;
+    // Balance exceeded
+    static final short SW_EXCEED_MAX_BALANCE = 0x6A84;
     // Balance negative
     static final short SW_NEGATIVE_BALANCE = 0x6A85;
     
 
-    public static final byte INS_OUTPUT_MESS1 = 0x00;
-    public static final byte INS_OUTPUT_MESS2 = 0x01;
-
-    private static final byte[] MESS_1 = { 'H', 'e', 'l', 'l', 'o', ' ', 'm', 'y', ' ', 'n', 'a', 'm', 'e', ' ', 'i',
-            's', ' ', 'L', 'e', 'o', 'n' };
-    private static final byte[] MESS_2 = { 'T', 'h', 'e', ' ', 'v', 'e', 'r', 's', 'i', 'o', 'n', ' ', 'o', 'f', ' ',
-            'm', 'y', ' ', 'J', 'a', 'v', 'a', 'C', 'a', 'r', 'd', ' ', 'A', 'P', 'I', ' ', 'i', 's', ':', ' ' };
-
-
-
-
-    /* Constructor */
+    /**
+     * Constructor
+     * 
+     * @param bArray
+     * @param bOffset
+     * @param bLength
+     */
     private PINCheck(byte bArray[], short bOffset, byte bLength) {
     // private PINCheck() {
         // Create PIN
@@ -97,6 +100,11 @@ public class PINCheck extends Applet {
         pin.reset();
     }
 
+    /**
+     * Deposit money into account
+     * 
+     * @param apdu
+     */
     public void deposit(APDU apdu){
 
         byte[] buffer = apdu.getBuffer(); // To parse the apdu
@@ -118,8 +126,13 @@ public class PINCheck extends Applet {
         byte creditAmount = buffer[ISO7816.OFFSET_CDATA];
 
         // check credit amount
-        if(creditAmount < 0){
-            ISOException.throwIt(SW_INVALID_AMOUNT);
+        if(creditAmount < 0 || creditAmount > MAX_TX_AMOUNT){
+            ISOException.throwIt(SW_INVALID_TX_AMOUNT);
+        }
+
+        // check new balance
+        if((short)(balance + creditAmount) > MAX_BALANCE){
+            ISOException.throwIt(SW_EXCEED_MAX_BALANCE);
         }
 
         // credit the amount
@@ -127,6 +140,11 @@ public class PINCheck extends Applet {
 
     }
 
+    /**
+     * Debit money from account
+     * 
+     * @param apdu
+     */
     public void debit(APDU apdu){
 
         byte[] buffer = apdu.getBuffer(); // To parse the apdu
@@ -147,8 +165,8 @@ public class PINCheck extends Applet {
         byte debitAmount = buffer[ISO7816.OFFSET_CDATA];
 
         // check debit amount
-        if(debitAmount < 0){
-            ISOException.throwIt(SW_INVALID_AMOUNT);
+        if(debitAmount < 0 || debitAmount > MAX_TX_AMOUNT){
+            ISOException.throwIt(SW_INVALID_TX_AMOUNT);
         }
 
         if((short)(balance - debitAmount) < (short) 0){
@@ -159,6 +177,11 @@ public class PINCheck extends Applet {
         balance = (short)(balance - debitAmount);
     }
 
+    /**
+     * Retrieve balance from account
+     * 
+     * @param apdu
+     */
     public void getBalance(APDU apdu){
         byte[] buffer = apdu.getBuffer(); // To parse the apdu
 
@@ -181,9 +204,13 @@ public class PINCheck extends Applet {
         
         // send 2-byte balance at offset 0 of the buffer
         apdu.sendBytes((short) 0, (short)2);
-
     }
 
+    /**
+     * Verify PIN. Required before any other operations (debit, deposit, getBalance)
+     * 
+     * @param apdu
+     */
     public void verify(APDU apdu){
         byte[] buffer = apdu.getBuffer(); // To parse the apdu
         
@@ -208,36 +235,7 @@ public class PINCheck extends Applet {
         }
 
         switch (buffer[ISO7816.OFFSET_INS]) {
-
-            case INS_OUTPUT_MESS1:
-
-                Util.arrayCopyNonAtomic(MESS_1,
-                        (short) 0,
-                        buffer,
-                        (short) 0,
-                        (short) MESS_1.length);
-
-                apdu.setOutgoingAndSend((short) 0, (short) MESS_1.length);
-
-                break;
-
-            case INS_OUTPUT_MESS2:
-
-                Util.arrayCopyNonAtomic(MESS_2,
-                        (short) 0,
-                        buffer,
-                        (short) 0,
-                        (short) MESS_2.length);
-
-                short ver = JCSystem.getVersion();
-
-                buffer[(short) MESS_2.length] = (byte) ver;
-                buffer[(short) (MESS_2.length + 1)] = (byte) (ver >> 8);
-
-                apdu.setOutgoingAndSend((short) 0, (short) (MESS_2.length + 2));
-
-                break;
-
+            
             case GET_BALANCE:
                 getBalance(apdu);
                 break;
