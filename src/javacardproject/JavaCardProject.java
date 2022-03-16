@@ -1,4 +1,4 @@
-package pincheck;
+package javacardproject;
 
 import java.util.prefs.BackingStoreException;
 
@@ -23,7 +23,7 @@ import javacard.framework.OwnerPIN;
  * 
  **/
 
-public class PINCheck extends Applet {
+public class JavaCardProject extends Applet {
     public static final byte CLA_MONAPPLET = (byte) 0xB0;
 
     /******** Operations (INS) ********/
@@ -70,8 +70,8 @@ public class PINCheck extends Applet {
      * @param bOffset
      * @param bLength
      */
-    private PINCheck(byte bArray[], short bOffset, byte bLength) {
-    // private PINCheck() {
+    private JavaCardProject(byte bArray[], short bOffset, byte bLength) {
+    // private JavaCardProject() {
         // Create PIN
         pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
         // Init PIN
@@ -81,9 +81,9 @@ public class PINCheck extends Applet {
     }
 
     public static void install(byte bArray[], short bOffset, byte bLength) throws ISOException {
-        // new PINCheck();
+        // new JavaCardProject();
         byte arr[] = {1,2,3,4};
-        new PINCheck(arr, (short) 0, (byte) 0x04);
+        new JavaCardProject(arr, (short) 0, (byte) 0x04);
     }
 
 
