@@ -11,7 +11,7 @@ import javacard.framework.JCSystem;
 import javacard.framework.OwnerPIN;
 
 /** 
- * PIN Check implementation for the Embedded Security course at École Polytechnique.
+ * JavaCard Project for the Embedded Security course at École Polytechnique.
  * 
  * @author Marwan Nour | marwan.nour@polytechnique.edu 
  * 
