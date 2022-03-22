@@ -60,7 +60,6 @@ class transmitObserver(CardObserver):
 
 if __name__ == "__main__":
 
-    
     # Connect reader
     r=readers()
 
@@ -104,6 +103,8 @@ if __name__ == "__main__":
         pin_valid = False
 
         def getStatusCode(sw1, sw2):
+            status_ok = False
+
             # Check PIN
             if(sw1 == 0x63 and sw2 == 0x01):
                 print("Please validated your PIN first")
@@ -115,6 +116,9 @@ if __name__ == "__main__":
                 print("Negative balance error. Please input a number <= current balance.")
             elif(sw1 == 0x90 and sw2 == 0x00):
                 print("Operation successful")
+                status_ok = True
+
+            return status_ok
 
         def verifyPIN(connection):
             global pin_valid
@@ -202,8 +206,8 @@ if __name__ == "__main__":
                 print(hex(sw1), hex(sw2), data, "\n")
 
             # Print status code
-            getStatusCode(sw1, sw2)
-            
+            tx_status = getStatusCode(sw1, sw2)
+            return tx_status
 
         # Loop until exit or failure
         while True:
@@ -265,9 +269,13 @@ if __name__ == "__main__":
                     break 
 
                 # Debit from current card
-                debit(connection, tx_amount)
-
-                ############### BEGIN TEST #############
+                tx_status_ok = debit(connection, tx_amount)
+                
+                # Check status before proceeding (to avoid creating money)
+                if tx_status_ok == False:
+                    print("Transaction failed... Exiting")
+                    continue
+                
                 print("Insert or remove a smartcard in the system.")
                 print("Waiting for 10 seconds")
                 print("")
@@ -301,7 +309,7 @@ if __name__ == "__main__":
                     # Ask for PIN
                     verifyPIN(connection)
 
-                elif not inserted:
+                elif not inserted: # no card inside reader
                     print("Card removed... Aborting")
                     break
 

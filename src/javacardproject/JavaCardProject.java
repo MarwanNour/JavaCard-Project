@@ -20,6 +20,7 @@ import javacard.framework.OwnerPIN;
  * - https://docs.oracle.com/javacard/3.0.5/api/javacard/framework/OwnerPIN.html
  * - https://www.oracle.com/java/technologies/java-card/writing-javacard-applet2.html
  * - https://docs.oracle.com/en/java/javacard/3.1/jc_api_srvc/api_classic/javacard/framework/ISO7816.html
+ * - https://github.com/OpenCryptoProject/JCMathLib/blob/master/JCMathLib/ext/java_card_kit-2_2_2-win/samples/src/com/sun/javacard/samples/wallet/Wallet.java
  * 
  **/
 
@@ -31,13 +32,13 @@ public class JavaCardProject extends Applet {
     public static final byte DEPOSIT = (byte) 0x30;
     public static final byte DEBIT = (byte) 0x40;
     public static final byte GET_BALANCE = (byte) 0x50;
-    
+
     /******** Decl ********/
     // PIN decl
     OwnerPIN pin;
     // Balance decl
     short balance;
-    
+
     /******** PIN specs ********/
     // PIN length
     public static final byte MAX_PIN_SIZE = (byte) 4;
@@ -73,17 +74,23 @@ public class JavaCardProject extends Applet {
     private JavaCardProject(byte bArray[], short bOffset, byte bLength) {
     // private JavaCardProject() {
         // Create PIN
-        pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
-        // Init PIN
-        pin.update(bArray, bOffset, bLength);
+        pin = new OwnerPIN(PIN_TRY_LIMIT,   MAX_PIN_SIZE);
         
-        register(); // Mandatory to register
+        byte iLen = bArray[bOffset]; // aid length
+        bOffset = (short) (bOffset+iLen+1);
+        byte cLen = bArray[bOffset]; // info length
+        bOffset = (short) (bOffset+cLen+1);
+        byte aLen = bArray[bOffset]; // applet data length
+        
+        // The installation parameters contain the PIN
+        // initialization value
+        pin.update(bArray, (short)(bOffset+1), aLen);
+        register();
+
     }
 
     public static void install(byte bArray[], short bOffset, byte bLength) throws ISOException {
-        // new JavaCardProject();
-        byte arr[] = {1,2,3,4};
-        new JavaCardProject(arr, (short) 0, (byte) 0x04);
+        new JavaCardProject(bArray, bOffset, bLength);
     }
 
 

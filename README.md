@@ -6,8 +6,8 @@ JavaCard Project for the Embedded Systems Security course at École Polytechniqu
 
 ## Usage
 1. Go to the project directory (same directory as an `build.xml` file) and run `ant` to compile the `.java` files into `.cap` files.
-2. Install the `.cap` file into your card with `gp --install <applet.cap>`
-3. Run the Python client files corresponding to the project  
+2. Install the `.cap` file into your card with `gp --install <applet.cap> --params <pin_in_hex>`
+3. Run the Python client in `Client/` directory
 
 
 Files:
