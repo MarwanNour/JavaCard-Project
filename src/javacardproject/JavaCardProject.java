@@ -9,6 +9,9 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.framework.JCSystem;
 import javacard.framework.OwnerPIN;
+import javacard.security.*;
+import javacardx.crypto.Cipher; 
+
 
 /** 
  * JavaCard Project for the Embedded Security course at École Polytechnique.
@@ -33,11 +36,27 @@ public class JavaCardProject extends Applet {
     public static final byte DEBIT = (byte) 0x40;
     public static final byte GET_BALANCE = (byte) 0x50;
 
+    public static final byte GET_INFO = (byte) 0x51;
+    public static final byte DES_ENCRYPT = (byte) 0x52;
+
     /******** Decl ********/
     // PIN decl
     OwnerPIN pin;
     // Balance decl
     short balance;
+    
+    // User info
+    private static byte[] card_num;
+    private static byte[] card_user_name;
+
+    DESKey m_desKey;
+
+    // 3DES key
+    byte [] keydata  = {(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11} ;
+
+
+
+
 
     /******** PIN specs ********/
     // PIN length
@@ -62,6 +81,9 @@ public class JavaCardProject extends Applet {
     static final short SW_EXCEED_MAX_BALANCE = 0x6A84;
     // Balance negative
     static final short SW_NEGATIVE_BALANCE = 0x6A85;
+
+    // DES data input bad length 
+    public static final short SW_CIPHER_DATA_LENGTH_BAD = 0x6A86;
     
 
     /**
@@ -72,21 +94,90 @@ public class JavaCardProject extends Applet {
      * @param bLength
      */
     private JavaCardProject(byte bArray[], short bOffset, byte bLength) {
-    // private JavaCardProject() {
         // Create PIN
         pin = new OwnerPIN(PIN_TRY_LIMIT,   MAX_PIN_SIZE);
         
-        byte iLen = bArray[bOffset]; // aid length
-        bOffset = (short) (bOffset+iLen+1);
-        byte cLen = bArray[bOffset]; // info length
-        bOffset = (short) (bOffset+cLen+1);
-        byte aLen = bArray[bOffset]; // applet data length
+        byte aidLength = bArray[bOffset];           // aid length
+        bOffset = (short) (bOffset+aidLength+1);
+        byte controlLength = bArray[bOffset];       // control info length
+        bOffset = (short) (bOffset+controlLength+1);
+        byte dataLength = bArray[bOffset];          // applet data length
         
         // The installation parameters contain the PIN
         // initialization value
-        pin.update(bArray, (short)(bOffset+1), aLen);
+        pin.update(bArray, (short)(bOffset+1), (byte) 0x04);
+
+
+        // Build DES key object
+        m_desKey = (DESKey)KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_3KEY, false);
+        m_desKey.setKey(keydata,(short)0);
+
+        // For testing: setting up DES key through installation (need to fix offsets)
+        // Set DES key value
+        // bOffset = (short) (bOffset + aLen + 1);
+        // desKey.setKey(bArray, (short) (bOffset + 5));
+
+        card_num = new byte[(short)4];          // fixed card number size (4 bytes long) 
+        bOffset = (short) (bOffset + 0x04 + 1);     // offset + pin size
+        Util.arrayCopy(bArray, bOffset, card_num, (short)0, (byte) card_num.length);
+
+
+        card_user_name = new byte[(short) 15];  // fixed card user's name (15 bytes long)
+        bOffset = (short) (bOffset + 4);        // offset + card num size
+        Util.arrayCopy(bArray, bOffset, card_user_name, (short) 0, (byte) card_user_name.length);
+        
         register();
 
+    }
+
+    public void des_encrypt(APDU apdu){
+        byte[] buffer = apdu.getBuffer(); // To parse the apdu
+
+        byte byteRead = (byte)(apdu.setIncomingAndReceive());
+
+        if((byteRead % 8) != 0){
+            ISOException.throwIt(SW_CIPHER_DATA_LENGTH_BAD);
+        }
+
+        // byte [] input = {(byte)0x22,(byte)0x22,(byte)0x22}; // For testing only
+        byte [] output = new byte [100];
+
+        // Create cipher object
+        Cipher m_encryptCipher = Cipher.getInstance(Cipher.ALG_DES_ECB_ISO9797_M1, false);
+        m_encryptCipher.init(m_desKey, Cipher.MODE_ENCRYPT);
+        
+        // encrypt incoming buffer
+        m_encryptCipher.doFinal(buffer, ISO7816.OFFSET_CDATA, byteRead, output, (short)0);
+
+        // copy to outgoing buffer
+        Util.arrayCopyNonAtomic(output, (short)0, buffer, ISO7816.OFFSET_CDATA, byteRead);
+
+        // send outgoing buffer
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, byteRead);
+    }
+
+    /***
+     * Gets card info (card number and card user name)
+     * 
+     * @param apdu
+     */
+    public void getInfo(APDU apdu){
+        byte[] buffer = apdu.getBuffer(); // To parse the apdu
+            
+        Util.arrayCopyNonAtomic(card_num, 
+                                (short) 0,
+                                buffer, 
+                                (short) 0, 
+                                (short) card_num.length);
+        
+        Util.arrayCopyNonAtomic(card_user_name,
+                                (short) 0,
+                                buffer,
+                                (short) card_num.length,
+                                (short) card_user_name.length);
+
+
+        apdu.setOutgoingAndSend((short) 0, (short) (card_num.length + card_user_name.length));
     }
 
     public static void install(byte bArray[], short bOffset, byte bLength) throws ISOException {
@@ -257,6 +348,14 @@ public class JavaCardProject extends Applet {
 
             case VERIFY:
                 verify(apdu);
+                break;
+
+            case GET_INFO:
+                getInfo(apdu);
+                break;
+
+            case DES_ENCRYPT:
+                des_encrypt(apdu);
                 break;
 
             default:
