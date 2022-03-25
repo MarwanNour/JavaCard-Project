@@ -20,14 +20,21 @@ Example:
         ------ Festival ATM ------
 
         Supported Operations:
+        0 - Get card info
         1 - Verify PIN
         2 - Deposit
         3 - Debit
         4 - Check Balance
         5 - Send to another card
+        6 - Encrypt data (just a POC for testing)
         9 - Exit
         ==========================
         
+
+Please input the type of operation:0
+ 
+                    Card Number: 5679 		 Card User Name: BOB
+                    
 
 Please input the type of operation:1
 Please enter your pin:1234
