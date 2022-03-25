@@ -18,6 +18,7 @@ from smartcard.util import toHexString
 from smartcard.CardMonitoring import CardMonitor, CardObserver
 from smartcard.Exceptions import NoCardException
 from des import DesKey
+import rsa
 
 # Debug mode
 DEBUG = False
@@ -34,6 +35,26 @@ elif len(sys.argv) > 2:
 inserted = False
 inserted_count = 0
 
+# RSA public key
+rsa_mod = [0xbe, 0xdf, 
+        0xd3, 0x7a, 0x08, 0xe2, 0x9a, 0x58, 
+        0x27, 0x54, 0x2a, 0x49, 0x18, 0xce, 
+        0xe4, 0x1a, 0x60, 0xdc, 0x62, 0x75, 
+        0xbd, 0xb0, 0x8d, 0x15, 0xa3, 0x65, 
+        0xe6, 0x7b, 0xa9, 0xdc, 0x09, 0x11, 
+        0x5f, 0x9f, 0xbf, 0x29, 0xe6, 0xc2, 
+        0x82, 0xc8, 0x35, 0x6b, 0x0f, 0x10, 
+        0x9b, 0x19, 0x62, 0xfd, 0xbd, 0x96, 
+        0x49, 0x21, 0xe4, 0x22, 0x08, 0x08, 
+        0x80, 0x6c, 0xd1, 0xde, 0xa6, 0xd3, 
+        0xc3, 0x8f]
+rsa_mod = int.from_bytes(rsa_mod, "big")
+
+rsa_exp = [0x01, 0x00, 0x01]
+
+rsa_exp = int.from_bytes(rsa_exp, "big")
+
+rsa_pub_key = rsa.PublicKey(rsa_mod, rsa_exp)
 
 # a simple card observer that prints inserted/removed cards
 class transmitObserver(CardObserver):
@@ -102,7 +123,7 @@ if __name__ == "__main__":
         3 - Debit
         4 - Check Balance
         5 - Send to another card
-        6 - Encrypt data
+        6 - Encrypt data (just a POC for testing)
         9 - Exit
         ==========================
         """
@@ -160,6 +181,19 @@ if __name__ == "__main__":
                     except ValueError:
                         return
 
+                # # Pad to 8 bytes
+                # while((len(DATA) % 8) != 0):
+                #     DATA.append(0x00)
+
+                # # Encrypt DATA
+                # enc_msg = des_key.encrypt(bytes(DATA))
+
+                # list_enc_msg = []
+                # for e in enc_msg:
+                #     list_enc_msg.append(e)
+
+                # print(f"list_enc_msg = {list_enc_msg}")
+                
                 data, sw1, sw2 = connection.transmit([CLA, INS, P1, P2, Lc]+ DATA)
                 
                 if DEBUG:
@@ -378,13 +412,27 @@ if __name__ == "__main__":
                     print(f"inserted : {inserted}, inserted_count {inserted_count}")
 
             elif choice == "6":
-                #### Encrypt ####
+                #### Encrypt message ####
                 print("enc")
                 CLA     = 0xB0
                 INS     = 0x52
                 P1      = 0x00
                 P2      = 0x00
-                DATA    = [0x42, 0x41, 0x42, 0x41, 0x41, 0x42, 0x41, 0x42] # Test: BOB. TODO Change it
+
+                user_input = input("Enter a message you would like to encrypt:")
+                tmp_data = bytearray(user_input.encode())
+
+                if DEBUG:
+                    print(f"Input: {tmp_data}. Length {len(tmp_data)}")
+                
+                # Pad to 8 bytes
+                while((len(tmp_data) % 8) != 0):
+                    tmp_data.append(0x00)
+
+                DATA = []
+                for e in tmp_data:
+                    DATA.append(e)
+
                 Lc      = len(DATA)
 
                 print(f"Message to encrypt: {DATA}")
@@ -407,12 +455,39 @@ if __name__ == "__main__":
                         msg += str(hex(e)) + " "
                     
                     msg = msg[0:len(msg) - 1]
-                    print(msg)
+
+                    if DEBUG:
+                        print(f"Message from Card: {msg}")
 
                     values = bytearray(data)
                     
                     dec_msg = des_key.decrypt(bytes(values))
                     print(f"Decrypted msg from card: {dec_msg}")
+
+            # elif choice == "7":
+            #     #### Verify message #####
+            #     CLA     = 0xB0
+            #     INS     = 0x53
+            #     P1      = 0x00
+            #     P2      = 0x00
+                
+            #     user_input = input("Enter a message you would like to verify:")
+            #     tmp_data = bytearray(user_input.encode())
+
+            #     DATA = []
+            #     for e in tmp_data:
+            #         DATA.append(e)
+
+            #     Lc      = len(DATA)
+                
+            #     data, sw1, sw2 = connection.transmit([CLA, INS, P1, P2, Lc] + DATA)
+               
+            #     if DEBUG:
+            #         print("Card Info:")
+            #         print(hex(sw1), hex(sw2), data, "\n")
+
+            #     if(sw1 == 0x90 and sw2 == 0x00):
+            #         rsa.verify(user_input, data, rsa_pub_key)
 
             elif choice == "9":
                 print("Thank you for using our ATM, enjoy the festival.")

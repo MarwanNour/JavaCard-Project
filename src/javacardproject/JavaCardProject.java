@@ -24,7 +24,7 @@ import javacardx.crypto.Cipher;
  * - https://www.oracle.com/java/technologies/java-card/writing-javacard-applet2.html
  * - https://docs.oracle.com/en/java/javacard/3.1/jc_api_srvc/api_classic/javacard/framework/ISO7816.html
  * - https://github.com/OpenCryptoProject/JCMathLib/blob/master/JCMathLib/ext/java_card_kit-2_2_2-win/samples/src/com/sun/javacard/samples/wallet/Wallet.java
- * 
+ * - https://github.com/OpenCryptoProject/JCMathLib/blob/master/JCMathLib/ext/java_card_kit-2_2_2-win/samples/src/com/sun/javacard/samples/sigMsgRec/SigMsgRecApplet.java
  **/
 
 public class JavaCardProject extends Applet {
@@ -38,6 +38,7 @@ public class JavaCardProject extends Applet {
 
     public static final byte GET_INFO = (byte) 0x51;
     public static final byte DES_ENCRYPT = (byte) 0x52;
+    public static final byte SIGN_MSG = (byte) 0x53;
 
     /******** Decl ********/
     // PIN decl
@@ -49,14 +50,50 @@ public class JavaCardProject extends Applet {
     private static byte[] card_num;
     private static byte[] card_user_name;
 
+    // Crypto
     DESKey m_desKey;
+    Signature m_sessionCBCMAC;
+    Signature m_sign;
 
+    RSAPrivateKey m_privateKey;
+    RSAPublicKey m_publicKey;
+    
+
+    // RSA Keypair data
+    private static final byte[] RSA_PUB_KEY_EXP = {(byte)0x01, (byte)0x00, (byte)0x01};
+    private static final byte[] RSA_PUB_PRIV_KEY_MOD = { (byte)0xbe, (byte)0xdf, 
+        (byte)0xd3, (byte)0x7a, (byte)0x08, (byte)0xe2, (byte)0x9a, (byte)0x58, 
+        (byte)0x27, (byte)0x54, (byte)0x2a, (byte)0x49, (byte)0x18, (byte)0xce, 
+        (byte)0xe4, (byte)0x1a, (byte)0x60, (byte)0xdc, (byte)0x62, (byte)0x75, 
+        (byte)0xbd, (byte)0xb0, (byte)0x8d, (byte)0x15, (byte)0xa3, (byte)0x65, 
+        (byte)0xe6, (byte)0x7b, (byte)0xa9, (byte)0xdc, (byte)0x09, (byte)0x11, 
+        (byte)0x5f, (byte)0x9f, (byte)0xbf, (byte)0x29, (byte)0xe6, (byte)0xc2, 
+        (byte)0x82, (byte)0xc8, (byte)0x35, (byte)0x6b, (byte)0x0f, (byte)0x10, 
+        (byte)0x9b, (byte)0x19, (byte)0x62, (byte)0xfd, (byte)0xbd, (byte)0x96, 
+        (byte)0x49, (byte)0x21, (byte)0xe4, (byte)0x22, (byte)0x08, (byte)0x08, 
+        (byte)0x80, (byte)0x6c, (byte)0xd1, (byte)0xde, (byte)0xa6, (byte)0xd3, 
+        (byte)0xc3, (byte)0x8f};
+
+    private static final byte[] RSA_PRIV_KEY_EXP = { (byte)0x84, (byte)0x21, 
+        (byte)0xfe, (byte)0x0b, (byte)0xa4, (byte)0xca, (byte)0xf9, (byte)0x7d, 
+        (byte)0xbc, (byte)0xfc, (byte)0x0e, (byte)0xa9, (byte)0xbb, (byte)0x7a, 
+        (byte)0xbd, (byte)0x7d, (byte)0x65, (byte)0x40, (byte)0x2b, (byte)0x08, 
+        (byte)0xc6, (byte)0xdf, (byte)0xc9, (byte)0x4b, (byte)0x09, (byte)0x6a, 
+        (byte)0x29, (byte)0x3b, (byte)0xc2, (byte)0x42, (byte)0x88, (byte)0x23, 
+        (byte)0x44, (byte)0xaf, (byte)0x08, (byte)0x82, (byte)0x4c, (byte)0xff, 
+        (byte)0x42, (byte)0xa4, (byte)0xb8, (byte)0xd2, (byte)0xda, (byte)0xcc, 
+        (byte)0xee, (byte)0xc5, (byte)0x34, (byte)0xed, (byte)0x71, (byte)0x01, 
+        (byte)0xab, (byte)0x3b, (byte)0x76, (byte)0xde, (byte)0x6c, (byte)0xa2, 
+        (byte)0xcb, (byte)0x7c, (byte)0x38, (byte)0xb6, (byte)0x9a, (byte)0x4b, 
+        (byte)0x28, (byte)0x01};
+        
     // 3DES key
-    byte [] keydata  = {(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11} ;
-
-
-
-
+    byte [] keydata  = {(byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,
+                        (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, 
+                        (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,
+                        (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11, 
+                        (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11,
+                        (byte)0x11,(byte)0x11,(byte)0x11,(byte)0x11} ;
 
     /******** PIN specs ********/
     // PIN length
@@ -81,7 +118,6 @@ public class JavaCardProject extends Applet {
     static final short SW_EXCEED_MAX_BALANCE = 0x6A84;
     // Balance negative
     static final short SW_NEGATIVE_BALANCE = 0x6A85;
-
     // DES data input bad length 
     public static final short SW_CIPHER_DATA_LENGTH_BAD = 0x6A86;
     
@@ -107,10 +143,35 @@ public class JavaCardProject extends Applet {
         // initialization value
         pin.update(bArray, (short)(bOffset+1), (byte) 0x04);
 
-
+        // Create DES MAC signature object 
+        // m_sessionCBCMAC = Signature.getInstance(Signature.ALG_DES_MAC4_NOPAD, false);
+        
         // Build DES key object
         m_desKey = (DESKey)KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_3KEY, false);
         m_desKey.setKey(keydata,(short)0);
+
+        // Create RSA keys and pair
+        // m_privateKey = KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_1024, false);
+        // m_publicKey = KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_1024, true);
+        // m_keyPair = new KeyPair(KeyPair.ALG_RSA, (short) m_publicKey.getSize());
+
+        m_privateKey = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_512, false);
+        m_publicKey = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_512, false);
+        m_privateKey.setExponent(RSA_PRIV_KEY_EXP,(short)0,(short)RSA_PRIV_KEY_EXP.length);
+        m_privateKey.setModulus(RSA_PUB_PRIV_KEY_MOD,(short)0,(short)RSA_PUB_PRIV_KEY_MOD.length);
+        m_publicKey.setExponent(RSA_PUB_KEY_EXP,(short)0,(short)RSA_PUB_KEY_EXP.length);
+        m_publicKey.setModulus(RSA_PUB_PRIV_KEY_MOD,(short)0,(short)RSA_PUB_PRIV_KEY_MOD.length);
+
+        // // Generate keys
+        // m_keyPair.genKeyPair();
+        // // Get key references
+        // m_publicKey = m_keyPair.getPublic();
+        // m_privateKey = m_keyPair.getPrivate();
+
+        // Create RSA signature object
+        Signature m_sign = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
+        m_sign.init(m_privateKey, Signature.MODE_SIGN);
+
 
         // For testing: setting up DES key through installation (need to fix offsets)
         // Set DES key value
@@ -127,10 +188,14 @@ public class JavaCardProject extends Applet {
         Util.arrayCopy(bArray, bOffset, card_user_name, (short) 0, (byte) card_user_name.length);
         
         register();
-
     }
 
-    public void des_encrypt(APDU apdu){
+    /**
+     * 3DES Encryption (this is just a POC for testing purposes)
+     * 
+     * @param apdu
+     */
+    public void tripleDESEncrypt(APDU apdu){
         byte[] buffer = apdu.getBuffer(); // To parse the apdu
 
         byte byteRead = (byte)(apdu.setIncomingAndReceive());
@@ -151,6 +216,65 @@ public class JavaCardProject extends Applet {
 
         // copy to outgoing buffer
         Util.arrayCopyNonAtomic(output, (short)0, buffer, ISO7816.OFFSET_CDATA, byteRead);
+
+        // send outgoing buffer
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, byteRead);
+    }
+
+    
+    // TODO: Fix 
+    /**
+     * Sign transaction with RSA then encrypt with 3DES
+     * 
+     * @param apdu
+     */
+    public void signThenEncryptTransaction(APDU apdu){
+
+        byte[] buffer = apdu.getBuffer();
+        byte byteRead = (byte)(apdu.setIncomingAndReceive());
+
+        byte[] output_sig = new byte [100];
+
+        // sign buffer and store in output
+        short sigLen = m_sign.sign(buffer, ISO7816.OFFSET_CDATA, byteRead, output_sig, (byte)0); 
+
+        byte [] output_enc = new byte [100];
+    
+        // Create cipher object
+        Cipher m_encryptCipher = Cipher.getInstance(Cipher.ALG_DES_ECB_ISO9797_M1, false);
+        m_encryptCipher.init(m_desKey, Cipher.MODE_ENCRYPT);
+
+        // encrypt signed output 
+        short encLen = m_encryptCipher.doFinal(buffer, ISO7816.OFFSET_CDATA, sigLen, output_enc, (short)0);
+
+        // // encrypt transaction
+        // short tx_len = m_encryptCipher.doFinal(buffer, ISO7816.OFFSET_CDATA, sigLen, output_enc, (short)0);
+
+        // copy to outgoing buffer
+        Util.arrayCopyNonAtomic(output_enc, (short)0, buffer, ISO7816.OFFSET_CDATA, encLen);
+
+        // send outgoing buffer
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, byteRead);
+
+    }
+
+    // TODO: Fix
+    /**
+     * Sign message from incoming buffer with RSA
+     * 
+     * @param apdu
+     */
+    public void signMessage(APDU apdu){
+        byte[] buffer = apdu.getBuffer();
+        byte byteRead = (byte)(apdu.setIncomingAndReceive());
+        
+        byte[] output_sig = new byte [100];
+        
+        // sign buffer and store in output
+        short sigLen = m_sign.sign(buffer, ISO7816.OFFSET_CDATA, byteRead, output_sig, (short)0); // TODO: Fix bug here 
+        
+        // copy to outgoing buffer
+        Util.arrayCopyNonAtomic(output_sig, (short)0, buffer, ISO7816.OFFSET_CDATA, sigLen);
 
         // send outgoing buffer
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, byteRead);
@@ -315,6 +439,15 @@ public class JavaCardProject extends Applet {
         // get pin data
         byte byteRead = (byte)(apdu.setIncomingAndReceive());
 
+        // byte [] output = new byte[100];
+        
+        // // Create cipher object 
+        // Cipher m_decryptCipher = Cipher.getInstance(Cipher.ALG_DES_ECB_ISO9797_M2, false);
+        // m_decryptCipher.init(m_desKey, Cipher.MODE_DECRYPT);
+        
+        // // decrypt PIN from incoming buffer
+        // m_decryptCipher.doFinal(buffer, ISO7816.OFFSET_CDATA, byteRead, output, (short)0);
+    
         if(pin.check(buffer, ISO7816.OFFSET_CDATA, byteRead) == false){
             ISOException.throwIt(SW_VERIFICATION_FAILED);
         }
@@ -355,8 +488,12 @@ public class JavaCardProject extends Applet {
                 break;
 
             case DES_ENCRYPT:
-                des_encrypt(apdu);
+                tripleDESEncrypt(apdu);
                 break;
+            
+            // case SIGN_MSG:
+            //     signMessage(apdu);
+            //     break;
 
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
