@@ -4,6 +4,8 @@ Marwan Nour | marwan.nour@polytechnique.edu
 
 JavaCard Project for the Embedded Systems Security course at École Polytechnique.
 
+*Note: Using `vagrant` with the provided Vagrantfile is recommended. You will have to modify the build.xml file to point to the `ext/` directory.*
+
 ## Usage
 1. Go to the project directory (same directory as an `build.xml` file) and run `ant` to compile the `.java` files into `.cap` files.
 2. Install the `.cap` file into your card with `gp --install <applet.cap> --params <pin_in_hex>`
